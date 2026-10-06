@@ -1,8 +1,7 @@
-# fvmc
+# $\lambda$-jellium neural quantum states
 
-Variational Monte Carlo for fermions in first quantization, reduced to the
-inference path: it loads a wavefunction and samples it to compute
-local energies and observables. 
+Code accompanying [Valenti, A., Vituri, Y., Yang, Y., Parker, D.E., Soejima, T., Dong, J., Morales, M.A., Vishwanath, A., Berg, E. and Zhang, S., 2025. Quantum geometry driven crystallization: A neural-network variational Monte Carlo study. arXiv preprint arXiv:2512.07947],
+for evaluating and sampling wave-functions from loaded checkpoints and computing observables.
 
 ## Requirements
 
