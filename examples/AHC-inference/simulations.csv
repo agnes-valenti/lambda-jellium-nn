@@ -1,0 +1,78 @@
+nelec,rs,lambda,phase,ansatz,twist,checkpoint,h5,etot,etot_err,note
+36,6,0.72,ahc,nn,,checkpoints/ckpt_lambda0.72_rs6_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs6_ne36.h5,-0.19283128,0.00000681,
+36,8,0.72,ahc,nn,,checkpoints/ckpt_lambda0.72_rs8_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs8_ne36.h5,-0.15852366,0.00000621,
+36,8,0.9,ahc,nn,,checkpoints/ckpt_lambda0.9_rs8_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.9_rs8_ne36.h5,-0.15550814,0.00000710,
+36,8,1.2,ahc,nn,,checkpoints/ckpt_lambda1.2_rs8_ahc_ne36.pkl,checkpoints/HFoutput_lambda1.2_rs8_ne36.h5,-0.15649358,0.00000799,
+36,8,1.4,ahc,nn,,checkpoints/ckpt_lambda1.4_rs8_ahc_ne36.pkl,checkpoints/HFoutput_lambda1.4_rs8_ne36.h5,-0.15860256,0.00000801,
+36,10,0.72,ahc,nn,,checkpoints/ckpt_lambda0.72_rs10_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs10_ne36.h5,-0.13445326,0.00000448,
+36,12,0.72,ahc,nn,,checkpoints/ckpt_lambda0.72_rs12_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs12_ne36.h5,-0.11759940,0.00000321,
+36,12,0.9,ahc,nn,,checkpoints/ckpt_lambda0.9_rs12_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.9_rs12_ne36.h5,-0.11688347,0.00000334,
+36,15,0.72,ahc,nn,,checkpoints/ckpt_lambda0.72_rs15_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs15_ne36.h5,-0.09887028,0.00000201,
+36,18,0.5,ahc,nn,,checkpoints/ckpt_lambda0.5_rs18_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.5_rs18_ne36.h5,-0.08710986,0.00000175,
+36,18,0.6,ahc,nn,,checkpoints/ckpt_lambda0.6_rs18_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.6_rs18_ne36.h5,-0.08602461,0.00000170,
+36,18,0.67,ahc,nn,,checkpoints/ckpt_lambda0.67_rs18_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.67_rs18_ne36.h5,-0.08556675,0.00000160,
+36,18,0.72,ahc,nn,,checkpoints/ckpt_lambda0.72_rs18_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs18_ne36.h5,-0.08538614,0.00000172,
+36,18,0.9,ahc,nn,,checkpoints/ckpt_lambda0.9_rs18_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.9_rs18_ne36.h5,-0.08533228,0.00000183,
+36,20,0.6,ahc,nn,,checkpoints/ckpt_lambda0.6_rs20_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.6_rs20_ne36.h5,-0.07892274,0.00000137,
+36,20,0.72,ahc,nn,,checkpoints/ckpt_lambda0.72_rs20_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs20_ne36.h5,-0.07812014,0.00000142,
+36,25,0.6,ahc,nn,,checkpoints/ckpt_lambda0.6_rs25_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.6_rs25_ne36.h5,-0.06489277,0.00000104,
+36,25,0.667,ahc,nn,,checkpoints/ckpt_lambda0.667_rs25_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.667_rs25_ne36.h5,-0.06473792,0.00000106,
+36,25,0.72,ahc,nn,,checkpoints/ckpt_lambda0.72_rs25_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs25_ne36.h5,-0.06469024,0.00000121,
+36,25,0.9,ahc,nn,,checkpoints/ckpt_lambda0.9_rs25_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.9_rs25_ne36.h5,-0.06505094,0.00000173,ahc (?) that starts to deplete k=0
+36,30,0.72,ahc,nn,,checkpoints/ckpt_lambda0.72_rs30_ahc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs30_ne36.h5,-0.05524159,0.00000103,
+36,4,0,liq,nn,,checkpoints/ckpt_lambda0_rs4_liq_ne36.pkl,checkpoints/HFoutput_lambda0_rs4_ne36.h5,-0.33330639,0.00000049,
+36,4,0.33,liq,nn,,checkpoints/ckpt_lambda0.33_rs4_liq_ne36.pkl,checkpoints/HFoutput_lambda0.33_rs4_ne36.h5,-0.29741323,0.00000481,
+36,4,0.72,liq,nn,,checkpoints/ckpt_lambda0.72_rs4_liq_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs4_ne36.h5,-0.24293366,0.00000932,
+36,6,0.72,liq,nn,,checkpoints/ckpt_lambda0.72_rs6_liq_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs6_ne36.h5,-0.19430884,0.00000703,
+36,8,0,liq,nn,,checkpoints/ckpt_lambda0_rs8_liq_ne36.pkl,checkpoints/HFoutput_lambda0_rs8_ne36.h5,-0.20393470,0.00000018,
+36,8,0.33,liq,nn,,checkpoints/ckpt_lambda0.33_rs8_liq_ne36.pkl,checkpoints/HFoutput_lambda0.33_rs8_ne36.h5,-0.18557546,0.00000275,
+36,8,0.72,liq,nn,,checkpoints/ckpt_lambda0.72_rs8_liq_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs8_ne36.h5,-0.15849276,0.00000586,
+36,8,0.9,liq,nn,,checkpoints/ckpt_lambda0.9_rs8_liq_ne36.pkl,checkpoints/HFoutput_lambda0.9_rs8_ne36.h5,-0.15437974,0.00000694,liq (very slightly stripey)
+36,8,1.2,liq,nn,,checkpoints/ckpt_lambda1.2_rs8_liq_ne36.pkl,checkpoints/HFoutput_lambda1.2_rs8_ne36.h5,-0.15476876,0.00000810,liq (very slightly stripey)
+36,10,0.72,liq,nn,,checkpoints/ckpt_lambda0.72_rs10_liq_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs10_ne36.h5,-0.13308549,0.00000492,
+36,12,0,liq,nn,,checkpoints/ckpt_lambda0_rs12_liq_ne36.pkl,checkpoints/HFoutput_lambda0_rs12_ne36.h5,-0.14553313,0.00000010,
+36,12,0.33,liq,nn,,checkpoints/ckpt_lambda0.33_rs12_liq_ne36.pkl,checkpoints/HFoutput_lambda0.33_rs12_ne36.h5,-0.13273780,0.00000197,
+36,12,0.72,liq,nn,,checkpoints/ckpt_lambda0.72_rs12_liq_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs12_ne36.h5,-0.11461140,0.00000419,
+36,12,0.9,liq,nn,,checkpoints/ckpt_lambda0.9_rs12_liq_ne36.pkl,checkpoints/HFoutput_lambda0.9_rs12_ne36.h5,-0.11184571,0.00000505,liq (slightly stripey)
+36,15,0.72,liq,nn,,checkpoints/ckpt_lambda0.72_rs15_liq_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs15_ne36.h5,-0.09457007,0.00000367,
+36,18,0.33,liq,nn,,checkpoints/ckpt_lambda0.33_rs18_liq_ne36.pkl,checkpoints/HFoutput_lambda0.33_rs18_ne36.h5,-0.09283008,0.00000142,
+36,20,0,liq,nn,,checkpoints/ckpt_lambda0_rs20_liq_ne36.pkl,checkpoints/HFoutput_lambda0_rs20_ne36.h5,-0.09269122,0.00000008,liq/crystal
+36,25,0.33,liq,nn,,checkpoints/ckpt_lambda0.33_rs25_liq_ne36.pkl,checkpoints/HFoutput_lambda0.33_rs25_ne36.h5,-0.06869899,0.00000132,
+36,8,0.33,twc,nn,,checkpoints/ckpt_lambda0.33_rs8_twc_ne36.pkl,checkpoints/HFoutput_lambda0.33_rs8_ne36.h5,-0.18453237,0.00000235,
+36,10,0.72,twc,nn,,checkpoints/ckpt_lambda0.72_rs10_twc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs10_ne36.h5,-0.13438153,0.00000406,twc/liquid?
+36,12,0,twc,nn,,checkpoints/ckpt_lambda0_rs12_twc_ne36.pkl,checkpoints/HFoutput_lambda0_rs12_ne36.h5,-0.14491596,0.00000035,
+36,12,0.33,twc,nn,,checkpoints/ckpt_lambda0.33_rs12_twc_ne36.pkl,checkpoints/HFoutput_lambda0.33_rs12_ne36.h5,-0.13277024,0.00000158,
+36,12,0.72,twc,nn,,checkpoints/ckpt_lambda0.72_rs12_twc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs12_ne36.h5,-0.11718639,0.00000294,twc/liquid?
+36,12,0.9,twc,nn,,checkpoints/ckpt_lambda0.9_rs12_twc_ne36.pkl,checkpoints/HFoutput_lambda0.9_rs12_ne36.h5,-0.11404021,0.00000368,twc/liquid?
+36,18,0,twc,nn,,checkpoints/ckpt_lambda0_rs18_twc_ne36.pkl,checkpoints/HFoutput_lambda0_rs18_ne36.h5,-0.10163088,0.00000019,
+36,18,0.2,twc,nn,,checkpoints/ckpt_lambda0.2_rs18_twc_ne36.pkl,checkpoints/HFoutput_lambda0.2_rs18_ne36.h5,-0.09804209,0.00000063,
+36,18,0.33,twc,nn,,checkpoints/ckpt_lambda0.33_rs18_twc_ne36.pkl,checkpoints/HFoutput_lambda0.33_rs18_ne36.h5,-0.09413872,0.00000093,
+36,18,0.5,twc,nn,,checkpoints/ckpt_lambda0.5_rs18_twc_ne36.pkl,checkpoints/HFoutput_lambda0.5_rs18_ne36.h5,-0.08947719,0.00000128,
+36,18,0.6,twc,nn,,checkpoints/ckpt_lambda0.6_rs18_twc_ne36.pkl,checkpoints/HFoutput_lambda0.6_rs18_ne36.h5,-0.08726196,0.00000151,
+36,18,0.67,twc,nn,,checkpoints/ckpt_lambda0.67_rs18_twc_ne36.pkl,checkpoints/HFoutput_lambda0.67_rs18_ne36.h5,-0.08602635,0.00000178,
+36,18,0.72,twc,nn,,checkpoints/ckpt_lambda0.72_rs18_twc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs18_ne36.h5,-0.08530120,0.00000180,
+36,20,0.72,twc,nn,,checkpoints/ckpt_lambda0.72_rs20_twc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs20_ne36.h5,-0.07824909,0.00000154,
+36,25,0,twc,nn,,checkpoints/ckpt_lambda0_rs25_twc_ne36.pkl,checkpoints/HFoutput_lambda0_rs25_ne36.h5,-0.07557026,0.00000004,
+36,25,0.33,twc,nn,,checkpoints/ckpt_lambda0.33_rs25_twc_ne36.pkl,checkpoints/HFoutput_lambda0.33_rs25_ne36.h5,-0.07054127,0.00000050,
+36,25,0.72,twc,nn,,checkpoints/ckpt_lambda0.72_rs25_twc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs25_ne36.h5,-0.06514126,0.00000116,
+36,25,0.9,twc,nn,,checkpoints/ckpt_lambda0.9_rs25_twc_ne36.pkl,checkpoints/HFoutput_lambda0.9_rs25_ne36.h5,-0.06405503,0.00000258,
+36,30,0.72,twc,nn,,checkpoints/ckpt_lambda0.72_rs30_twc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs30_ne36.h5,-0.05585066,0.00000093,
+36,35,0,twc,nn,,checkpoints/ckpt_lambda0_rs35_twc_ne36.pkl,checkpoints/HFoutput_lambda0_rs35_ne36.h5,-0.05540640,0.00000002,
+36,18,0.72,hwc,nn,,checkpoints/ckpt_lambda0.72_rs18_hwc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs18_ne36.h5,-0.08475471,0.00000307,
+36,18,0.8,hwc,nn,,checkpoints/ckpt_lambda0.8_rs18_hwc_ne36.pkl,checkpoints/HFoutput_lambda0.8_rs18_ne36.h5,-0.08497270,0.00000166,
+36,18,0.9,hwc,nn,,checkpoints/ckpt_lambda0.9_rs18_hwc_ne36.pkl,checkpoints/HFoutput_lambda0.9_rs18_ne36.h5,-0.08532972,0.00000329,
+36,25,0.70667,hwc,nn,,checkpoints/ckpt_lambda0.70667_rs25_hwc_ne36.pkl,checkpoints/HFoutput_lambda0.70667_rs25_ne36.h5,-0.06478555,0.00000105,
+36,25,0.9,hwc,nn,,checkpoints/ckpt_lambda0.9_rs25_hwc_ne36.pkl,checkpoints/HFoutput_lambda0.9_rs25_ne36.h5,-0.06545897,0.00000118,
+36,30,0.72,hwc,nn,,checkpoints/ckpt_lambda0.72_rs30_hwc_ne36.pkl,checkpoints/HFoutput_lambda0.72_rs30_ne36.h5,-0.05553452,0.00000101,
+16,4,0.72,ahc,nn,,checkpoints/ckpt_lambda0.72_rs4_ahc_ne16.pkl,checkpoints/HFoutput_lambda0.72_rs4_ne16.h5,-0.24314038,0.00002660,
+16,6,0.72,ahc,nn,,checkpoints/ckpt_lambda0.72_rs6_ahc_ne16.pkl,checkpoints/HFoutput_lambda0.72_rs6_ne16.h5,-0.19519269,0.00001273,
+16,8,0.72,ahc,nn,,checkpoints/ckpt_lambda0.72_rs8_ahc_ne16.pkl,checkpoints/HFoutput_lambda0.72_rs8_ne16.h5,-0.16017611,0.00000821,
+16,4,0.72,liq,nn,,checkpoints/ckpt_lambda0.72_rs4_liq_ne16.pkl,checkpoints/HFoutput_lambda0.72_rs4_ne16.h5,-0.24309836,0.00001433,
+16,6,0.72,liq,nn,,checkpoints/ckpt_lambda0.72_rs6_liq_ne16.pkl,checkpoints/HFoutput_lambda0.72_rs6_ne16.h5,-0.19472115,0.00001125,
+16,8,0.72,liq,nn,,checkpoints/ckpt_lambda0.72_rs8_liq_ne16.pkl,checkpoints/HFoutput_lambda0.72_rs8_ne16.h5,-0.15922762,0.00000931,
+16,6,0.72,ahc,nn_sbf,,checkpoints/ckpt_lambda0.72_rs6_ahc_sbf_ne16.pkl,checkpoints/HFoutput_lambda0.72_rs6_ne16.h5,-0.19734853,0.00002161,from NN_6/AHC_ST; the training config never applied its twist to the crystal k-set
+16,8,0.72,ahc,nn_sbf,,checkpoints/ckpt_lambda0.72_rs8_ahc_sbf_ne16.pkl,checkpoints/HFoutput_lambda0.72_rs8_ne16.h5,-0.16170944,0.00001142,"from NN_8/AHC_ST; same, untwisted crystal"
+16,6,0.72,liq,nn_sbf,"-0.2,0.2",checkpoints/ckpt_lambda0.72_rs6_liq_sbf_tw_ne16.pkl,checkpoints/HFoutput_lambda0.72_rs6_ne16.h5,-0.19774940,0.00001989,from NN_6/FL_ST
+16,8,0.72,liq,nn_sbf,"-0.2,0.2",checkpoints/ckpt_lambda0.72_rs8_liq_sbf_tw_ne16.pkl,checkpoints/HFoutput_lambda0.72_rs8_ne16.h5,-0.16158552,0.00001622,from NN_8/FL_ST
+16,6,0.72,liq,nn,"-0.2,0.2",checkpoints/ckpt_lambda0.72_rs6_liq_tw_ne16.pkl,checkpoints/HFoutput_lambda0.72_rs6_ne16.h5,-0.19570320,0.00001118,from NN_6/Fluid_twist
+16,8,0.72,liq,nn,"-0.2,0.2",checkpoints/ckpt_lambda0.72_rs8_liq_tw_ne16.pkl,checkpoints/HFoutput_lambda0.72_rs8_ne16.h5,-0.15945029,0.00000807,

@@ -1,0 +1,20 @@
+# Exact versions this code was run and validated with (Python 3.11).
+# Installing with `pip install -r requirements.txt` gives a CPU-only JAX;
+# see README.md for the GPU variant.
+
+numpy==1.26.4
+jax==0.4.30
+jaxlib==0.4.30
+flax==0.8.5
+ml-collections==0.1.1
+PyYAML==6.0
+npy-append-array==0.9.16
+h5py==3.11.0
+
+# forward-mode Laplacian, required by fvmc.hamiltonian; not on PyPI
+fwdlap @ git+https://github.com/y1xiaoc/fwdlap@ebd869387606a7a676bd1aec0c85f9edeb7429f2
+
+# only needed to plot the observables
+matplotlib==3.8.4
+scipy==1.13.0
+seaborn==0.13.2

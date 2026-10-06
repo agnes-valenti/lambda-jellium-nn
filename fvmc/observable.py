@@ -1,0 +1,668 @@
+"""Analyze a trajectory of walkers for observables.
+
+traj shape = (niter, nsample, nelec, ndim)
+walker shape = (nsample, nelec, ndim)
+snapshot shape = (nelec, ndim)
+
+gen_calc_[obs] are often needed to jit calc_[obs].
+calc_[obs] typically operates on walker, and sometimes works for snapshot.
+
+Typical usage:
+>>> meta = read_meta('hparam.yml'); spins = meta['system']['spins']
+>>> cell = meta['system']['cell']; ndim = len(cell)
+>>> nelec = meta['system']['nelec']
+>>> traj = read_traj('trajdump.npy', ndim, nelec)
+>>> bins = (64,)*ndim  # density grid
+>>> rho_info, rho_mean, rho_error = calc_obs(traj, calc_dens, cell, spins, bins)
+>>> # calc_dens is directly jittable, so no gen_calc_dens and pass args
+>>> rcut = cell[0, 0]/2  # g(r) radial cutoff
+>>> calc_gofr = gen_calc_gofr(cell, spins, bins[0], rcut)
+>>> # calc_gofr is jitted during gen_calc_gofr with args baked in
+>>> gr_info, gr_mean, gr_error = calc_obs(traj, calc_gofr)
+"""
+
+from functools import partial
+from typing import Callable, Sequence, Literal, Tuple
+
+import jax
+import numpy as np
+import yaml
+from jax import lax
+from jax import numpy as jnp
+from jax import tree_util as jtu
+
+from .ewaldsum import gen_pbc_disp_fn, gen_positive_gpoints
+from .wavefunction.base import log_psi_from_model
+from .utils import Array, displace_matrix, parse_spin_num, pdist
+from .utils import ArrayTree, gen_ksphere
+from .utils import ElecConf, ensure_spin, split_spin, attach_spin
+
+
+def read_meta(fmeta: str) -> dict:
+    """ read metadata of run
+
+    Args:
+      fmeta (str): hparams.yaml
+    Return:
+      dict: metadata
+    """
+    # read raw metadata
+    #print("AVFLAGS: fmeta = ", fmeta)
+    with open(fmeta, 'r') as f:
+      meta = yaml.load(f, Loader=yaml.Loader)
+    # derived metadata
+    elems = meta['system']['elems']
+    # nelec
+    nelec = sum(elems) if elems else 0
+    # Convert numpy integer to plain integer
+    charge = meta['system']['charge']
+    if isinstance(charge, str) and 'np.int64' in charge:
+        charge = eval(charge)  # Evaluate the string to convert it to a numpy integer
+    if isinstance(charge, np.integer):
+        charge = int(charge)
+    nelec -= int(charge)  # AVFLAG added int because charge was a string
+    meta['system']['nelec'] = nelec
+    # spins
+    spin = meta['system']['spin']
+    spins = parse_spin_num(nelec, spin)
+    # !!!! HACK add following to parse_spin?
+    for i, ns in enumerate(spins):
+      if ns <= 0:
+        spins = spins[:i]
+        break
+    meta['system']['spins'] = spins
+    return meta
+
+
+def read_traj(ftraj: str, ndim: int, nelec: int) -> ElecConf:
+    """Read trajectory dump into array
+
+    Args:
+      ftraj (str): trajdump.npy
+      ndim (int): number of spatial dimensions
+      nelec (int): number of electrions
+    Return:
+      Array: particle coordinates, shape (niter, nsample, nelec, ndim)
+      Array: spin coordinates, shape (niter, nsample, nelec)
+    """
+    data = np.load(ftraj)
+    niter, nsample, ncoord = data.shape
+    ned = nelec * ndim
+    # HACK assume the spin variable is at tail here
+    traj = data[:, :, :ned].reshape(niter, nsample, nelec, ndim)
+    straj = data[:, :, ned:]
+    return traj, straj
+
+
+def reshape_traj(traj: Array, batch_size:int, max_batch:int=None):
+    """Reshape trajectory to limit memory and time costs
+
+    Args:
+      traj (Array): trajectory with shape (niter, nsample, **nconf)
+      batch_size (int): number of configs. in a batch, limit memory cost
+      max_batch (int, optional): maximum number of batches, limit compute
+    Return:
+      Array: selected subset of given trajectory
+    """
+    traj_shape = traj.shape
+    niter, nsample = traj_shape[:2]
+    conf_shape = traj_shape[2:]
+    ntot = niter * nsample
+    nbatch = ntot // batch_size
+    if nbatch < 4:
+        msg = 'Too few batches %d for statistical error.' % nbatch
+        msg += '  reduce batch_size to ntot//4=%d (ntot=%d).' % (ntot//4, ntot)
+        raise RuntimeError(msg)
+    max_batch = min(max_batch, nbatch) if max_batch else nbatch
+    nleft = ntot % batch_size
+    nevery = nbatch // max_batch
+    flat_traj = traj.reshape(-1, *conf_shape)[nleft:]
+    return flat_traj.reshape(-1, batch_size, *conf_shape)[::nevery][:max_batch]
+
+
+def calc_obs(traj: ElecConf, calc_func: Callable, *args, **kwargs):
+    """Calculate observable from trajectory.
+
+    Each calc_[obs](W_i, ...) computes observable O_i for walker W_i,
+      and returns (list, dict) containing (data, meta).
+    Given i=1,niter O_i, errorbar is estimated as sqrt( <O_i^2> - <O_i>^2 )/sqrt(niter).
+
+    Args:
+      traj (Array): trajectory
+      calc_func (Callable): function to calculate observable from walker
+    Return:
+      (dict, Array, Array): (meta, mean, error)
+    """
+    partial_calc = lambda walker: calc_func(walker, *args, **kwargs)
+    outputs, metas = lax.map(partial_calc, traj)
+    meta = jtu.tree_map(lambda x: x[0], metas)
+    # calculate mean and error
+    yml = []
+    yel = []
+    for y1 in outputs:
+        nsamp = y1.shape[0]
+        ym = jnp.mean(y1, axis=0)
+        y2 = jnp.mean(y1 * y1, axis=0)
+        # !!!! HACK: assume no autocorrelation
+        ye = (y2 - ym * ym)**0.5 / nsamp**0.5
+        yml.append(ym)
+        yel.append(ye)
+    return meta, jnp.asarray(yml), jnp.asarray(yel)
+
+
+def save_obs(prefix: str, meta: dict, ym: Array, ye: Array) -> None:
+    import os
+    path = os.path.dirname(prefix)
+    if not os.path.isdir(path):
+        os.makedirs(path)
+    fyml = f'{prefix}-info.yml'
+    with open(fyml, 'w') as f:
+        yaml.dump(meta, f)
+    for y, name in zip([ym, ye], ['mean', 'error']):
+        fnpy = f'{prefix}-{name}.npy'
+        np.save(fnpy, y)
+
+
+def load_obs(prefix: str):
+    fyml = f'{prefix}-info.yml'
+    with open(fyml, 'r') as f:
+        meta = yaml.full_load(f)
+    ret = [meta]
+    for name in ['mean', 'error']:
+        fnpy = f'{prefix}-{name}.npy'
+        data = np.load(fnpy)
+        ret.append(data)
+    return ret
+
+
+# =============================== dens ==============================
+
+def gen_calc_dens(cell: Array, spins: Sequence[int], bins: Sequence[int]):
+    return partial(calc_dens, cell=cell, spins=spins, bins=bins)
+
+
+@partial(jax.jit, static_argnames=('bins', 'spins'))
+def calc_dens(walker: Array, cell: Array, spins: Sequence[int], bins: Sequence[int]):
+    # normalized so that the integral of rho is the number of particles
+    # numerically, sum(hist * bin_vol) = n_elec
+    nsample, nelec, ndim = walker.shape
+    hrange = [(0, 1)] * ndim
+    bin_vol = np.prod(np.diff(hrange, axis=-1)) / np.prod(bins)
+    split_idx = np.cumsum((spins))[:-1]
+    invvec = jnp.linalg.inv(cell)
+    frac_walker = (walker @ invvec) % 1
+    frac_split = jnp.split(frac_walker, split_idx, axis=-2)
+    res = []
+    for fs in frac_split:
+        hist, edges = jnp.histogramdd(fs.reshape(-1, ndim), bins=bins, range=hrange)
+        res.append(hist / nsample / bin_vol)
+    return res, dict(edges=edges)
+
+
+# =============================== sofk ==============================
+
+def select_kvecs(recvec: Array, kcut: float, g_max: int=200) -> Array:
+    kvecs = gen_positive_gpoints(recvec, g_max)
+    k2 = jnp.sum(kvecs * kvecs, axis=-1)
+    sel = k2 < (kcut * kcut)
+    return kvecs[sel]
+
+
+def gen_calc_sofk(cell: Array, spins: Sequence[int], kcut: float) -> Callable:
+    recvec = jnp.linalg.inv(cell).T
+    kvecs = select_kvecs(recvec, kcut)
+
+    @jax.jit
+    def calc_sofk(walker: Array):
+        nspin = len(spins)
+        spin_idx = np.cumsum(spins)[:-1]
+        walker_split = jnp.split(walker, spin_idx, axis=-2)
+        res = []
+        rhoks = []
+        for ii in range(nspin):
+            kr = jnp.tensordot(kvecs, walker_split[ii], (-1, -1))
+            rhok = jnp.sum(jnp.exp(1j * kr), axis=-1)
+            rhoks.append(rhok)
+            rkm = rhok.mean(axis=-1)
+            res.append(rkm)
+        for ii, rhoki in enumerate(rhoks):
+            for _, rhokj in enumerate(rhoks[ii:], start=ii):
+                sofk = (rhoki * rhokj.conj()).real # real means symmetrize ij
+                res.append(sofk.mean(axis=-1))
+        return res, dict(kvecs=kvecs)
+
+    return calc_sofk
+
+
+# =============================== gofr ==============================
+
+def gen_calc_vecgofr(
+        cell: Array, spins: Sequence[int], bins: Sequence[int],
+        normalize: Literal["spin", "charge"] = "spin",
+        dens_hist: Array = None, dens_edges: Sequence[Array] = None,
+) -> Callable:
+    # normalized so that for uncorrelated particles this is one
+    # `normalize = 'spin'` means each spin species is normalized separately
+    # `normalize = 'charge'` means all particles are normalized together
+    nelec = sum(spins)
+    disp_fn = gen_pbc_disp_fn(cell)
+    invvec = jnp.linalg.inv(cell)
+    hlim = (-0.5, 0.5)
+    bin_vol = np.prod(np.diff(hlim, axis=-1) / bins)
+    norms = []
+    for ii, ni in enumerate(spins):
+        for jj, nj in enumerate(spins[ii:], start=ii):
+            npair = {"spin": ni * (ni - 1) if ii == jj else 2 * ni * nj,
+                     "charge": nelec * (nelec - 1)}[normalize]
+            norms.append(1 / (bin_vol * npair))
+
+    @jax.jit
+    def calc_vecgofr(walker: Array):
+        disp = jax.vmap(partial(displace_matrix, disp_fn=disp_fn))(walker, walker)
+        disp = disp @ invvec
+        nsample = len(disp)
+        weights = (1 / get_pair_dens_prod(walker, cell, spins,
+                                          dens_hist, dens_edges, fix_norm=True)
+                   if dens_hist is not None else None)
+        hists, edges = histogram_spin_blocks(disp, bins, spins, (-0.5, 0.5),
+                                             weights=weights)
+        res = [h * n / nsample for h, n in zip(hists, norms)]
+        return res, dict(edges=edges)
+
+    return calc_vecgofr
+
+
+def gen_calc_gofr(
+        cell: Array, spins: Sequence[int],
+        bins: int, rcut: float,
+        normalize: Literal["spin", "charge"] = "spin",
+        dens_hist: Array = None, dens_edges: Sequence[Array] = None,
+) -> Callable:
+    # normalized so that for uncorrelated particles this is one
+    # `normalize = 'spin'` means each spin species is normalized separately
+    # `normalize = 'charge'` means all particles are normalized together
+    nelec = sum(spins)
+    edges = np.histogram_bin_edges([0], bins, (0, rcut))
+    disp_fn = gen_pbc_disp_fn(cell)
+    gr_factor = gofr_norm_factor(cell, edges)
+    norms = []
+    for ii, ni in enumerate(spins):
+        for jj, nj in enumerate(spins[ii:], start=ii):
+            npair = {"spin": ni * (ni - 1) if ii == jj else 2 * ni * nj,
+                     "charge": nelec * (nelec - 1)}[normalize]
+            norms.append(gr_factor / npair)
+
+    @jax.jit
+    def calc_gofr(walker: Array):
+        dist = jax.vmap(partial(pdist, disp_fn=disp_fn))(walker)  # [-1, nelec, nelec]
+        dist = dist[:, :, :, None] # [-1, nelec, nelec, ndim]
+        nsample = dist.shape[0]
+        weights = (1 / get_pair_dens_prod(walker, cell, spins,
+                                          dens_hist, dens_edges, fix_norm=True)
+                   if dens_hist is not None else None)
+        # count
+        hists, edges = histogram_spin_blocks(dist, bins, spins, (0, rcut),
+                                             weights=weights)
+        # grid
+        e = jnp.asarray(edges[0])
+        r = 0.5 * (e[1:] + e[:-1])
+        # normalize
+        res = []
+        for hist, norm in zip(hists, norms):
+            gr = hist.at[0].set(0) * norm / nsample
+            res.append(gr)
+        return res, dict(r=r)
+
+    return calc_gofr
+
+
+def gofr_norm_factor(cell: Array, bin_edges: Array) -> Array:
+    r"""V / (4 \pi r^2 dr) for 3D, V / (2 \pi r dr) for 2D"""
+    ndim, ndim = cell.shape
+    # calculate shell volume of bins
+    vnorm = np.diff(2 * (ndim-1) / ndim * np.pi * bin_edges**ndim)
+    # total cell volume V
+    volume = np.abs(np.linalg.det(cell))
+    return volume / vnorm
+
+
+def query_density(
+        pos: Array, cell: Array,
+        dens_hist: Array, dens_edges: Sequence[Array] = None,
+        fix_norm: bool = False
+) -> Array:
+    ndim = dens_hist.ndim
+    assert ndim == pos.shape[-1]
+    if fix_norm: # make density mean 1, to be used as weight
+        dens_hist /= dens_hist.mean()
+    if dens_edges is None:
+        from . import LOGGER
+        LOGGER.info('No `dens_edges` provided, assuming uniform grid in [0,1]')
+        dens_edges = [jnp.histogram_bin_edges(0, s, (0, 1))
+                      for s in dens_hist.shape]
+    frac = (pos @ jnp.linalg.inv(cell)) % 1
+    idx_list = [jnp.digitize(f, e) - 1
+                for f, e in zip(jnp.moveaxis(frac, -1, 0), dens_edges)]
+    dens_vals = dens_hist[tuple(idx_list)]
+    idx_out = jnp.stack([
+        (i < 0) | (i >= s) for i, s in zip(idx_list, dens_hist.shape)
+    ], axis=-1).any(axis=-1)
+    dens_vals = jnp.where(idx_out, jnp.inf, dens_vals)
+    return dens_vals
+
+
+def get_pair_dens_prod(
+        walker: Array, cell: Array, spins: Sequence[int],
+        dens_hist: Array, dens_edges: Sequence[Array] = None,
+        fix_norm: bool = False
+) -> Array:
+    assert len(spins) == dens_hist.shape[0]
+    split_idx = np.cumsum((spins))[:-1]
+    walker_split = jnp.split(walker, split_idx, axis=-2)
+    dv_split = [query_density(w, cell, dens_hist[i], dens_edges, fix_norm)
+                for i, w in enumerate(walker_split)]
+    dens_vals = jnp.concatenate(dv_split, axis=-1) # n_sample, n_elec
+    pair_dens = dens_vals[..., :, None] * dens_vals[..., None, :]
+    return pair_dens # n_sample, n_elec, n_elec
+
+
+def histogram_spin_blocks(
+        dis: Array, bins: Sequence[int],
+        spins: Sequence[int], xlim: Sequence[float],
+        weights: Array = None
+) -> Tuple[list, Array]:
+    ndim = dis.shape[-1]
+    # split displacement or distnaces by spins
+    split_idx = np.cumsum((spins))[:-1]
+    dis_split = jnp.split(dis, split_idx, axis=-3)
+    dis_block = [jnp.split(d, split_idx, axis=-2) for d in dis_split]
+    if weights is not None:
+        assert weights.shape == dis.shape[:-1]
+        w_split = jnp.split(weights, split_idx, axis=-2)
+        w_block = [jnp.split(w, split_idx, axis=-1) for w in w_split]
+    # histogram by spin-spin pair
+    res = []
+    for ii in range(len(spins)):
+        for jj, nj in enumerate(spins[ii:], start=ii):
+            dblock = dis_block[ii][jj]
+            if ii == jj:
+                with jax.ensure_compile_time_eval():
+                    mask = ~jnp.eye(nj, dtype=bool)
+                dflat = dblock[:, mask].reshape(-1, ndim) # only 1 batch axis
+                if weights is not None:
+                    wflat = w_block[ii][jj][:, mask].reshape(-1)
+            else:
+                dblock_t = dis_block[jj][ii]
+                dflat = jnp.concatenate([dblock.reshape(-1, ndim),
+                                         dblock_t.reshape(-1, ndim)], axis=0)
+                if weights is not None:
+                    wflat = jnp.concatenate([w_block[ii][jj].reshape(-1),
+                                             w_block[jj][ii].reshape(-1)], axis=0)
+            hist, edges = jnp.histogramdd(
+                dflat, bins=bins, range=[xlim] * ndim,
+                weights=wflat if weights is not None else None)
+            res.append(hist)
+    return res, edges
+
+
+# =============================== nofk ==============================
+
+
+def gen_calc_nofk(
+        cell: Array, kcut: float, twist: Array, n_elec: int,
+        ansatz, params: ArrayTree, key: Array, n_samp: int = 32,
+) -> Callable:
+    n_dim = cell.shape[-1]
+    # mask to make new snapshots, each with one electron moved
+    single_particle_mask = jnp.zeros([n_elec, n_elec, n_dim], dtype=bool)
+    for i in range(n_elec):
+        single_particle_mask = single_particle_mask.at[i, i, :].set(True)
+    #ugly trick to match pos_s dimensions (there are way more elegant ways to do this)
+    single_particle_mask_spin = jnp.zeros([n_elec, n_elec], dtype=bool)
+    for i in range(n_elec):
+        single_particle_mask_spin = single_particle_mask_spin.at[i, i].set(True) 
+    # prepare to calculate wf ratios
+    batched_logpsi = jax.vmap(log_psi_from_model(ansatz), in_axes=[None, 0])
+    # locations to evaluate n(k) on
+    kvecs = gen_ksphere(cell, kcut, twist=twist)
+    # quadraqure points for Fourier transform
+    key, subkey = jax.random.split(key)
+    pos_r1 = jax.random.uniform(subkey, (n_samp, n_dim)) @ cell
+
+    def calc_nofk_snapshot_one_particle(pos: Array, p1: Array, logpsi0: float) -> Array:
+        pos_r, pos_s = split_spin(pos)  # pos now is of shape [nelec, ndim]
+        dr = p1 - pos_r  # move vectors, one for each particle [n_e, n_dim]
+        eikr = jnp.exp(1j * jnp.tensordot(kvecs, -dr, (-1, -1)))  # [n_k, n_e]
+        # move each particle to p1
+        dpos_r = dr[None] * single_particle_mask  # [n_e, n_e, n_dim]
+        r1 = pos_r[None] + dpos_r
+        if pos_s is not None:
+            #ugly trick to match pos_s dimensions (there are way more elegant ways to do this)
+            ds =  0*pos_s
+            dpos_s = ds[None] * single_particle_mask_spin  # [n_e, n_e, n_dim]
+            pos_s1 = pos_s[None] + dpos_s 
+            # evaluate wf ratios (all particles to one location)
+            logpsi1 = batched_logpsi(params, attach_spin(r1,pos_s1))  # pos[None]
+        else:
+            # evaluate wf ratios (all particles to one location)
+            logpsi1 = batched_logpsi(params, r1)
+        ratio = jnp.exp(logpsi1 - logpsi0)[None]  # same ratio for all k [-1, n_e]
+        nk1 = (eikr.real * ratio.real - eikr.imag * ratio.imag).sum(axis=-1)
+        return nk1
+
+    def calc_nofk_snapshot(pos: Array) -> Array:
+        pos_r, pos_s = split_spin(pos) #pos now is of shape [nelec,ndim]
+        if pos_s is not None:
+           logpsi0 = batched_logpsi(params, attach_spin(pos_r[None], pos_s[None]))[0]  #pos[None]
+        else:
+           logpsi0 = batched_logpsi(params, pos_r[None])[0]
+        #logpsi0 = batched_logpsi(params, attach_spin(pos_r[None], pos_s[None]))[0]  #pos[None]
+        one_fn = jax.vmap(calc_nofk_snapshot_one_particle, in_axes=(None, 0, None))
+        nk = one_fn(pos, pos_r1, logpsi0).mean(axis=0)
+        return nk
+
+    @jax.jit
+    def calc_nofk(walker: Array):
+        nk = lax.map(calc_nofk_snapshot, walker).mean(axis=0) #walker shape = [nsample, nelec, ndim]
+        nk_spins = [nk]  # TODO: spin-resolved n(k)
+        return nk_spins, dict(kvecs=kvecs)
+    
+    return calc_nofk
+
+
+# =============================== mdens ==============================
+
+def pauli_ss(s0, s1):
+    r"""Project continuous spin to Pauli matrices <s0|\sigma|s1>"""
+    sx = 2 * jnp.cos(s0 + s1)
+    sy = 2 * jnp.sin(s0 + s1)
+    sz = 2j * jnp.sin(s0 - s1)
+    return sx, sy, sz
+
+
+# this is the slow backup plan if no `pauli` method available
+def project_spins(ansatz, params, x: ElecConf, discrete_spin: bool=False) -> Array:
+    # prepare to calculate wf ratios
+    logpsi_fn = log_psi_from_model(ansatz)
+    batched_logpsi = jax.vmap(logpsi_fn, in_axes=[None, 0])
+    if not discrete_spin:
+        # simple integration
+        int1d = jax.scipy.integrate.trapezoid
+        # exact spin integration by Simpson's rule
+        ng = 9
+        sgrid = jnp.linspace(0, 2*jnp.pi, ng)
+    # s on the left, wfn at the denominator
+    logpsi0 = logpsi_fn(params, x)
+    r0, s0 = ensure_spin(x)
+    nelec, ndim = r0.shape
+    # inner loop for s1 on the right side, <s|\sigma|s1> psi(s1) / psi(s)
+    def evaluate_spin_projections(s1: float):
+        """At a given spin value, evaluate projection of all electrons
+        onto Pauli matrices.
+
+        Args:
+            s1 (float): spin value on integration grid
+        Return:
+            Array: grid values with shape (nelec, 3)
+        """
+        news = s1 * jnp.eye(nelec) + s0 * (1-jnp.eye(nelec))
+        newx = (jnp.broadcast_to(r0, (nelec, nelec, ndim)), news)
+        logpsi1 = batched_logpsi(params, newx)
+        ratio = jnp.exp(logpsi1 - logpsi0) # psi1 on top, psi0 on bottom
+        if discrete_spin:
+           return jnp.stack(pauli_ss_discrete(s0, s1), axis=-1) * ratio[..., None] 
+        # s1 to be integrated is on the right
+        return jnp.stack(pauli_ss(s0, s1), axis=-1) * ratio[..., None]
+    if discrete_spin:
+        return evaluate_spin_projections(0.25)+evaluate_spin_projections(0.75)
+    # get spin integration grids (ns, nelec, 3) for (nelec e, 3 Paulis)
+    grids = jax.lax.map(evaluate_spin_projections, sgrid)
+    # integrate s1
+    weights = int1d(grids, x=sgrid, axis=0) / (2*jnp.pi)
+    return weights
+
+
+def gen_calc_mdens(
+        cell: Array, bins: Sequence[int],
+        ansatz, params: ArrayTree
+) -> Callable:
+    # same normalization as density
+    hrange = [(0, 1)] * len(bins)
+    bin_vol = np.prod(np.diff(hrange, axis=-1)) / np.prod(bins)
+    # prepare to calculate fractional coordinates
+    invvec = jnp.linalg.inv(cell)
+    if hasattr(ansatz, 'pauli'):
+        batched_pauli = jax.vmap(partial(ansatz.apply, params, method='pauli'))
+    else:
+        from . import LOGGER
+        LOGGER.warning('No `pauli` method available, using backup integration method. '
+                       'This will be VERY SLOW.')
+        batched_pauli = lambda x: lax.map(partial(project_spins, ansatz, params), x)
+
+    @ jax.jit
+    def calc_mdens(walker: ElecConf):
+        r, s = ensure_spin(walker)
+        nsample, nelec, ndim = r.shape
+        fracs = (r.reshape(-1, ndim) @ invvec) % 1
+        weights = batched_pauli(walker).real # (nsample, nelec, 3)
+        wx, wy, wz = weights.reshape(-1, 3).T # (3, nsample * nelec)
+        # histogram
+        hx, edges = jnp.histogramdd(fracs, bins=bins, range=hrange, weights=wx)
+        hy, edges = jnp.histogramdd(fracs, bins=bins, range=hrange, weights=wy)
+        hz, edges = jnp.histogramdd(fracs, bins=bins, range=hrange, weights=wz)
+        mags = jnp.stack([hx, hy, hz], axis=0) / nsample / bin_vol
+        meta = {'edges': edges}
+        return [mags], meta
+
+    return calc_mdens
+
+
+# =============================== ceig ==============================
+# eigenvalue of C_n operator, where C_n is the spatial rotation by 2pi/n
+
+def rotmat2d(theta: float) -> Array:
+    return jnp.array([[jnp.cos(theta), -jnp.sin(theta)],
+                      [jnp.sin(theta), jnp.cos(theta)]])
+
+def gen_calc_ceig(
+        cell: Array, n_fold: int,
+        ansatz, params: ArrayTree, offset: Array, shift_phases: bool = False
+) -> Callable:
+    r"""Generate a closure function to calculate the eigenvalue of the C_n operator.
+        The eigenvalue is estimated by the ratio of the wavefunction at inversely 
+        rotated and original positions, \psi(R^-1 x) / \psi(x). To reduce variance, 
+        the ratio is averaged over all positions related by the rotation operator, 
+        i.e., R^i x, i = 0, 1, ..., n-1. The final expression to average is 
+        (note that R^-1 = R^{n-1}):
+        .. math::
+        \frac{1}{n} \sum_{i=0}^{n-1}
+            \frac{ |\psi(R^i x)|^2 }{ |\psi(x)|^2 }
+            \frac{ \psi(R^{i-1} x) }{ \psi(R^i x) }
+        Args: 
+            cell (Array): A 2D array representing the cell structure. Only 2D cells 
+                are supported, and the shape must be (2, 2).
+            n_fold (int): The order of the rotational symmetry (C_n). Must be an 
+                integer greater than 1.
+            ansatz: The wavefunction ansatz, which is a callable object.
+            params (ArrayTree): The parameters of the ansatz.
+            offset (Array): An array used to shift the origin of the point group 
+                symmetry.
+            shift_phases (bool, optional): If True, shifts the phases of the 
+                transformation under C3 symmetry for the specific case of the 
+                anomalous Hall crystal (AHC). Defaults to False.
+        Returns:
+            Callable: A function that calculates the eigenvalue of the C_n operator 
+            for a given walker configuration. 
+    r"""
+    assert cell.shape[0] == cell.shape[1] == 2, 'only 2D supported'
+    assert isinstance(n_fold, int) and n_fold > 1, 'n_fold must be an integer > 1'
+    # prepare to calculate wf ratios
+    #slog_fn = partial(ansatz.apply, params)
+    if shift_phases:
+        slog_fn = partial(ansatz.apply, params, method='call_with_phases')
+    else: 
+        slog_fn = partial(ansatz.apply, params)
+    # rotation matrix
+    powers = jnp.arange(n_fold)
+    rotmat = jax.vmap(rotmat2d)(2*jnp.pi/n_fold * powers)
+
+    @ jax.jit
+    def calc_ceig(walker: ElecConf):
+        r, s = split_spin(walker) # (nsample, nelec, ndim), (nsample, nelec)
+        offset_ = jnp.broadcast_to(offset, r.shape)
+        r = r - offset_
+        # rotate by 2pi/n * i, shape: (nfold, nsample, nelec, ndim)
+        r_rot = jnp.einsum('iab,mnb->imna', rotmat, r)
+        r_rot = r_rot + offset_ # shift back
+        # broadcast s to (nfold, nsample, nelec)
+        s = jnp.broadcast_to(s, (n_fold,) + s.shape) if s is not None else s
+        # sign and log of wavefunction, shape: (nfold, nsample)
+        if shift_phases:
+           phase_shifts = 2.0*np.pi/n_fold * (n_fold - powers)
+           phase_shifts = jnp.reshape(phase_shifts, (n_fold, 1, 1))
+           phase_shifts = jnp.broadcast_to(phase_shifts, s.shape)
+           sign, logp = jax.vmap(jax.vmap(slog_fn))(attach_spin(r_rot, s), phase_shifts)
+        else:
+            sign, logp = jax.vmap(jax.vmap(slog_fn))(attach_spin(r_rot, s))
+        
+        # log of weight |\psi(R^i x)|^2 / |\psi(x)|^2
+        log_weight = 2 * (logp - logp[0])
+        # log abs of ratio \psi(R^{i-1} x) / \psi(R^i x)
+        log_ratio = jnp.roll(logp, 1, axis=0) - logp
+        # sign of ratio
+        sign_ratio = jnp.roll(sign, 1, axis=0) / sign
+        # eigenvalues, before averaging over i and samples
+        ceig = jnp.exp(log_weight + log_ratio) * sign_ratio
+        return [ceig.mean(), ceig.std()], dict(n_fold=n_fold)
+    return calc_ceig
+
+
+
+def pauli_ss_discrete(s0, s1):
+    r"""Project discrete spin to Pauli matrices <s0|\sigma|s1>"""
+    s0=s0%1-0.5
+    s1=s1%1-0.5
+    s0=jnp.heaviside(s0, 1)[...,None] * jnp.array([1, 0]) + jnp.heaviside(-s0, 0)[...,None] * jnp.array([0, 1])
+    s1=jnp.heaviside(s1, 1)[...,None] * jnp.array([1, 0]) + jnp.heaviside(-s1, 0)[...,None] * jnp.array([0, 1])
+    sx =jnp.einsum("...i,...ij,...j->...", s0, jnp.array([[0,1],[1,0]]), s1)#s0.T @ jnp.array([[0,1],[1,0]]) @ s1
+    sy =jnp.einsum("...i,...ij,...j->...", s0, jnp.array([[0,-1j],[1j,0]]), s1)#s0.T @ jnp.array([[0,-1j],[1j,0]]) @ s1
+    sz =jnp.einsum("...i,...ij,...j->...", s0, jnp.array([[1,0],[0,-1]]), s1)#s0.T @ jnp.array([[1,0],[0,-1]]) @ s1
+    
+    return sx, sy, sz
+
+
+# =============================== utils ==============================
+
+def default_argparse(max_batch=64):
+    from argparse import ArgumentParser
+    parser = ArgumentParser()
+    parser.add_argument('ftraj', type=str)
+    parser.add_argument('--fyml', type=str, default='hparams.yaml')
+    parser.add_argument('--iter', '-i', type=int, default=0)
+    parser.add_argument('--jter', '-j', type=int, default=None)
+    parser.add_argument('--max_batch', '-m', type=int, default=max_batch,
+        help='reduce to save time')
+    parser.add_argument('--batch_size', '-b', type=int, default=32,
+        help='reduce to save memory')
+    parser.add_argument('--verbose', '-v', action='store_true')
+    return parser

@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Editor and OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# --- AHC-inference: run artefacts ------------------------------------------
+# run_inference.py writes everything under outputs/ (trajdump.npy, hparams.yaml,
+# overall_factor.txt, the energy files and the observable cache) and copies the
+# selected checkpoint to checkpoint.pkl. run_and_plot_observables.py drops its
+# figures in the example directory itself. None of this is input.
+examples/AHC-inference/outputs/
+examples/AHC-inference/checkpoint.pkl
+examples/AHC-inference/plot_*.pdf
+
+# --- AHC-inference: bulk data ----------------------------------------------
+# The Ne=16 checkpoints with their HF inputs (15 files, ~100 MB) and the dummy
+# example (~5 MB) are tracked, so a fresh clone can run every row of
+# simulations.csv. The Ne=36 set (~730 MB) is distributed separately -- ignore
+# it if it is unpacked into checkpoints/ here.
+examples/AHC-inference/checkpoints/*_ne36.pkl
+examples/AHC-inference/checkpoints/*_ne36.h5
