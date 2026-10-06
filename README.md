@@ -65,7 +65,10 @@ cd examples/AHC-inference
 python run_inference.py
 ```
 
-To run one of the published simulations, give the electron number, density
+The checkpoints of the optimized wave-functions as well as the helper input files specifying the simulation cell and Hamiltonian are not contained in this repository. Instead, they are distributed separately, and belong in `examples/AHC-inference/checkpoints/ 
+To run one of the published simulation, after downloading and copying the data files into this directory, follow the below steps.
+
+Give the electron number, density
 parameter, lambda and phase:
 
 ```bash
@@ -89,10 +92,7 @@ catalogue, not chosen on the command line.
 python run_inference.py --nelec 16 --rs 6 --lam 0.72 --phase liq --twisted
 ```
 
-
-The checkpoints and input files specifying the simulation cell and Hamiltonian for the N=36 runs all together are of the size ~700 MB, and not contained in this repository. Instead, they are distributed separately
-and belong in `examples/AHC-inference/checkpoints/ 
-To run a N=36 simulation, after downloading and copying the data files into this directory, specify `--nelec 36`, e.g. running the following:
+To run a N=36 simulation, specify `--nelec 36`, e.g. running the following:
 
 ```bash
 python run_inference.py --nelec 36 --rs 18 --lam 0.72 --phase ahc
